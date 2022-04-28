@@ -1,0 +1,99 @@
+From 6f0b3700964831fe2863596ef3998903a2fa1af6 Mon Sep 17 00:00:00 2001
+From: 31863 <qwertyuiopqc@163.com>
+Date: Fri, 29 Apr 2022 00:06:53 +0800
+Subject: [PATCH] =?UTF-8?q?ubi=E5=A2=9E=E5=8A=A0=E6=AF=8F=E4=B8=AA?=
+ =?UTF-8?q?=E6=93=A6=E9=99=A4=E5=BF=AB=E5=B1=9E=E6=80=A7?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ kernel/drivers/mtd/ubi/build.c | 44 ++++++++++++++++++++++++++++++++++
+ 1 file changed, 44 insertions(+)
+
+diff --git a/kernel/drivers/mtd/ubi/build.c b/kernel/drivers/mtd/ubi/build.c
+index 8b6587dc..8a2c5610 100644
+--- a/kernel/drivers/mtd/ubi/build.c
++++ b/kernel/drivers/mtd/ubi/build.c
+@@ -151,6 +151,8 @@ static struct device_attribute dev_mtd_num =
+ 	__ATTR(mtd_num, S_IRUGO, dev_attribute_show, NULL);
+ static struct device_attribute dev_ro_mode =
+ 	__ATTR(ro_mode, S_IRUGO, dev_attribute_show, NULL);
++static struct device_attribute dev_everyblocks_ec =
++	__ATTR(everyblocks_ec, S_IRUGO, dev_attribute_show, NULL);
+ 
+ /**
+  * ubi_volume_notify - send a volume change notification.
+@@ -349,6 +351,14 @@ static ssize_t dev_attribute_show(struct device *dev,
+ {
+ 	ssize_t ret;
+ 	struct ubi_device *ubi;
++    int peb_total = 0;
++    int i = 0;
++    int err = 0;
++    struct ubi_ec_hdr ech;
++    int ec = 0;
++    char* err_c = "@";
++
++    memset(&ech, 0x00, sizeof(struct ubi_ec_hdr));
+ 
+ 	/*
+ 	 * The below code looks weird, but it actually makes sense. We get the
+@@ -365,6 +375,8 @@ static ssize_t dev_attribute_show(struct device *dev,
+ 	if (!ubi)
+ 		return -ENODEV;
+ 
++    ret = 0;
++
+ 	if (attr == &dev_eraseblock_size)
+ 		ret = sprintf(buf, "%d\n", ubi->leb_size);
+ 	else if (attr == &dev_avail_eraseblocks)
+@@ -389,6 +401,37 @@ static ssize_t dev_attribute_show(struct device *dev,
+ 		ret = sprintf(buf, "%d\n", ubi->mtd->index);
+ 	else if (attr == &dev_ro_mode)
+ 		ret = sprintf(buf, "%d\n", ubi->ro_mode);
++	else if (attr == &dev_everyblocks_ec)
++    {
++        peb_total = ubi->peb_count;
++        for (i = 0; i < peb_total; i++)
++        {
++            err = ubi_io_is_bad(ubi, i);
++            if (err != 0)
++            {
++		        ret+= sprintf(buf+ret, "%s ", err_c);
++                continue;
++            }
++
++            err = ubi_io_read_ec_hdr(ubi, i, &ech, 0);
++            if (err != 0)
++            {
++		        ret+= sprintf(buf+ret, "%s ", err_c);
++                continue;
++            }
++
++            ec = be64_to_cpu(ech.ec);
++
++            if (i == peb_total - 1)
++            {
++		        ret+= sprintf(buf+ret, "%d \n", ec);
++            }
++            else
++            {
++                ret+= sprintf(buf+ret, "%d ", ec);
++            }
++        }   
++    }
+ 	else
+ 		ret = -EINVAL;
+ 
+@@ -409,6 +452,7 @@ static struct attribute *ubi_dev_attrs[] = {
+ 	&dev_bgt_enabled.attr,
+ 	&dev_mtd_num.attr,
+ 	&dev_ro_mode.attr,
++    &dev_everyblocks_ec.attr,
+ 	NULL
+ };
+ ATTRIBUTE_GROUPS(ubi_dev);
+-- 
+2.27.0
+
